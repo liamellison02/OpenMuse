@@ -27,7 +27,7 @@ from nba_api.stats.endpoints import (
     leaguestandings,
     teamdetails,
     teamyearbyyearstats,
-    scoreboard,
+    ScoreboardV2,
     boxscoretraditionalv2,
     playergamelog,
     teamgamelog
@@ -46,6 +46,36 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+
+import requests
+from functools import wraps
+
+def call_with_retries(api_func, max_retries=5, initial_delay=2, timeout=60, *args, **kwargs):
+    """
+    Call an API function with retries and exponential backoff on timeout/network errors.
+    """
+    delay = initial_delay
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Always pass timeout if supported
+            if 'timeout' in api_func.__code__.co_varnames:
+                result = api_func(*args, timeout=timeout, **kwargs)
+            else:
+                result = api_func(*args, **kwargs)
+            return result
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            logger.warning(f"[Attempt {attempt}/{max_retries}] Timeout or connection error: {e}. Retrying in {delay}s...")
+            time.sleep(delay)
+            delay *= 2
+            last_exc = e
+        except Exception as e:
+            logger.warning(f"[Attempt {attempt}/{max_retries}] General error: {e}. Retrying in {delay}s...")
+            time.sleep(delay)
+            delay *= 2
+            last_exc = e
+    logger.error(f"API call failed after {max_retries} attempts: {last_exc}")
+    raise last_exc
 
 class NBADataCollector:
     """
@@ -141,8 +171,7 @@ class NBADataCollector:
         cache_key = f"player_info_{player_id}"
         
         def fetch_player_info():
-            player_info = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
-            return player_info.get_normalized_dict()
+            return call_with_retries(lambda: commonplayerinfo.CommonPlayerInfo(player_id=player_id), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_player_info)
     
@@ -159,8 +188,7 @@ class NBADataCollector:
         cache_key = f"player_career_stats_{player_id}"
         
         def fetch_career_stats():
-            career_stats = playercareerstats.PlayerCareerStats(player_id=player_id)
-            return career_stats.get_normalized_dict()
+            return call_with_retries(lambda: playercareerstats.PlayerCareerStats(player_id=player_id), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_career_stats)
     
@@ -177,8 +205,7 @@ class NBADataCollector:
         cache_key = f"team_details_{team_id}"
         
         def fetch_team_details():
-            team_details = teamdetails.TeamDetails(team_id=team_id)
-            return team_details.get_normalized_dict()
+            return call_with_retries(lambda: teamdetails.TeamDetails(team_id=team_id), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_team_details)
     
@@ -195,8 +222,7 @@ class NBADataCollector:
         cache_key = f"team_history_{team_id}"
         
         def fetch_team_history():
-            team_history = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
-            return team_history.get_normalized_dict()
+            return call_with_retries(lambda: teamyearbyyearstats.TeamYearByYearStats(team_id=team_id), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_team_history)
     
@@ -214,12 +240,11 @@ class NBADataCollector:
         cache_key = f"league_leaders_{season}_{stat_category}"
         
         def fetch_league_leaders():
-            leaders = leagueleaders.LeagueLeaders(
+            return call_with_retries(lambda: leagueleaders.LeagueLeaders(
                 season=season,
                 stat_category_abbreviation=stat_category,
                 season_type_all_star="Regular Season"
-            )
-            return leaders.get_normalized_dict()
+            ), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_league_leaders)
     
@@ -236,8 +261,7 @@ class NBADataCollector:
         cache_key = f"standings_{season}"
         
         def fetch_standings():
-            standings = leaguestandings.LeagueStandings(season=season)
-            return standings.get_normalized_dict()
+            return call_with_retries(lambda: leaguestandings.LeagueStandings(season=season), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_standings)
     
@@ -254,8 +278,7 @@ class NBADataCollector:
         cache_key = f"recent_games_{days}"
         
         def fetch_recent_games():
-            games = scoreboard.Scoreboard(day_offset=days, league_id="00")
-            return games.get_normalized_dict()
+            return call_with_retries(lambda: ScoreboardV2(day_offset=days, league_id="00"), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_recent_games)
     
@@ -272,8 +295,7 @@ class NBADataCollector:
         cache_key = f"game_details_{game_id}"
         
         def fetch_game_details():
-            game_details = boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id)
-            return game_details.get_normalized_dict()
+            return call_with_retries(lambda: boxscoretraditionalv2.BoxScoreTraditionalV2(game_id=game_id), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_game_details)
     
@@ -291,12 +313,11 @@ class NBADataCollector:
         cache_key = f"player_game_log_{player_id}_{season}"
         
         def fetch_player_game_log():
-            game_log = playergamelog.PlayerGameLog(
+            return call_with_retries(lambda: playergamelog.PlayerGameLog(
                 player_id=player_id,
                 season=season,
                 season_type_all_star="Regular Season"
-            )
-            return game_log.get_normalized_dict()
+            ), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_player_game_log)
     
@@ -314,12 +335,11 @@ class NBADataCollector:
         cache_key = f"team_game_log_{team_id}_{season}"
         
         def fetch_team_game_log():
-            game_log = teamgamelog.TeamGameLog(
+            return call_with_retries(lambda: teamgamelog.TeamGameLog(
                 team_id=team_id,
                 season=season,
                 season_type_all_star="Regular Season"
-            )
-            return game_log.get_normalized_dict()
+            ), timeout=60).get_normalized_dict()
         
         return self._get_with_cache(cache_key, fetch_team_game_log)
     

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NBA Database Population Script for RAG-LLM Chatbot
+OpenMuse Population Script for RAG-LLM Chatbot
 
 This script orchestrates the entire process of collecting, processing,
 embedding, and uploading NBA data to a MongoDB Atlas vector database.
@@ -16,11 +16,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-# Import custom modules
-from nba_data_collector import NBADataCollector
-from nba_data_processor import NBADataProcessor
-from nba_embeddings_generator import NBAEmbeddingsGenerator
-from nba_mongodb_connector import NBAMongoDBConnector
+from collector import NBADataCollector
+from processor import NBADataProcessor
+from embeddings import NBAEmbeddingsGenerator
+from connector import NBAMongoDBConnector
 
 # Configure logging
 logging.basicConfig(
@@ -33,7 +32,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 class NBADatabasePopulator:
@@ -74,6 +72,9 @@ class NBADatabasePopulator:
         
         # Initialize components
         self.collector = NBADataCollector(output_dir=raw_data_dir)
+        # Ensure reference data exists before initializing processor
+        self.collector.collect_all_teams()
+        self.collector.collect_all_players()
         self.processor = NBADataProcessor(data_dir=raw_data_dir, output_dir=processed_data_dir)
         self.embedder = NBAEmbeddingsGenerator(data_dir=processed_data_dir, output_dir=embeddings_dir)
         self.connector = NBAMongoDBConnector(

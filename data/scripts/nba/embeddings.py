@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NBA Vector Embeddings Generator for RAG-LLM Chatbot
+NBA Vector Embeddings Generator
 
 This script generates vector embeddings for processed NBA data using
 OpenAI's text-embedding-ada-002 model and prepares them for insertion
@@ -19,7 +19,6 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 from openai import OpenAI
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,7 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 class NBAEmbeddingsGenerator:

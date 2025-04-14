@@ -4,3 +4,20 @@
 .next
 node_modules
 
+nba_data
+nba_processed_data
+nba_embeddings
+nba_data_collector.log
+nba_data_processor.log
+nba_embeddings_generator.log
+nba_mongodb_connector.log
+nba_database_populator.log
+
+.venv
+.venv/
+.venv/*
+
+*.env
+*.env.local
+
+__pycache__

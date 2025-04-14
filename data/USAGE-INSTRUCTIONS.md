@@ -1,4 +1,4 @@
-# NBA RAG-LLM Chatbot Data Population System - Usage Instructions
+# OpenMuse Population Pipeline - Usage Instructions
 
 ## Prerequisites
 
@@ -15,13 +15,13 @@ Before using this system, ensure you have:
 
 ```bash
 git clone <repository-url>
-cd nba-rag-llm-chatbot
+cd data/scripts/nba
 ```
 
 ### 2. Install Dependencies
 
 ```bash
-pip install nba_api openai pymongo python-dotenv tqdm numpy pandas
+pip install -r requirements.txt
 ```
 
 ### 3. Configure Environment Variables
@@ -48,14 +48,14 @@ If the index doesn't exist, the script will attempt to create it automatically.
 
 ## Running the System
 
-The main script for running the system is `nba_database_populator.py`. It provides several modes of operation:
+The main script for running the system is `populate.py`. It provides several modes of operation:
 
 ### Full Pipeline
 
 To run the complete pipeline (collect, process, embed, and upload):
 
 ```bash
-python nba_database_populator.py --mode full
+python populate.py --mode full
 ```
 
 This will:
@@ -69,7 +69,7 @@ This will:
 If you already have processed data and want to skip the collection and processing steps:
 
 ```bash
-python nba_database_populator.py --mode from_processed
+python populate.py --mode from_processed
 ```
 
 ### Starting from Embeddings
@@ -77,7 +77,7 @@ python nba_database_populator.py --mode from_processed
 If you already have embedded data and only want to upload it to MongoDB Atlas:
 
 ```bash
-python nba_database_populator.py --mode from_embeddings
+python populate.py --mode from_embeddings
 ```
 
 ## Command Line Options

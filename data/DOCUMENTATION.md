@@ -1,4 +1,4 @@
-# NBA RAG-LLM Chatbot Data Population System
+# OpenMuse Population Pipeline
 
 ## Overview
 
@@ -8,15 +8,15 @@ This system collects NBA data from reliable sources, processes it into natural l
 
 The system consists of the following components:
 
-1. **Data Collector** (`nba_data_collector.py`): Collects NBA data from the NBA API, including player information, team details, game results, and league statistics.
+1. **Data Collector** (`collector.py`): Collects NBA data from the NBA API, including player information, team details, game results, and league statistics.
 
-2. **Data Processor** (`nba_data_processor.py`): Transforms raw NBA data into natural language documents suitable for RAG applications, following the designed schema.
+2. **Data Processor** (`processor.py`): Transforms raw NBA data into natural language documents suitable for RAG applications, following the designed schema.
 
-3. **Embeddings Generator** (`nba_embeddings_generator.py`): Generates vector embeddings for the processed documents using OpenAI's text-embedding-ada-002 model.
+3. **Embeddings Generator** (`embeddings.py`): Generates vector embeddings for the processed documents using OpenAI's text-embedding-ada-002 model.
 
-4. **MongoDB Connector** (`nba_mongodb_connector.py`): Connects to MongoDB Atlas and uploads the embedded documents to the vector database.
+4. **MongoDB Connector** (`connector.py`): Connects to MongoDB Atlas and uploads the embedded documents to the vector database.
 
-5. **Database Populator** (`nba_database_populator.py`): Orchestrates the entire process, providing a unified interface to run the full pipeline or specific parts of it.
+5. **Database Populator** (`populate.py`): Orchestrates the entire process, providing a unified interface to run the full pipeline or specific parts of it.
 
 ## Data Flow
 
