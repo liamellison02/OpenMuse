@@ -10,15 +10,10 @@ import os
 import json
 import time
 import logging
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Union
-
-import pandas as pd
-import numpy as np
+from typing import Dict, List, Any, Optional
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# NBA API imports
 from nba_api.stats.static import players, teams
 from nba_api.stats.endpoints import (
     playercareerstats, 
@@ -33,7 +28,9 @@ from nba_api.stats.endpoints import (
     teamgamelog
 )
 
-# Configure logging
+import concurrent.futures
+import random
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -44,7 +41,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 import requests
@@ -93,7 +89,6 @@ class NBADataCollector:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        # Cache for API responses to avoid duplicate requests
         self.cache = {}
         
         logger.info("NBA Data Collector initialized")
@@ -113,7 +108,6 @@ class NBADataCollector:
         if cache_key in self.cache:
             return self.cache[cache_key]
         
-        # Add delay to avoid rate limiting
         time.sleep(0.6)
         
         try:
@@ -134,7 +128,6 @@ class NBADataCollector:
         logger.info("Collecting all NBA players")
         all_players = players.get_players()
         
-        # Save to file
         with open(f"{self.output_dir}/all_players.json", "w") as f:
             json.dump(all_players, f)
         
@@ -151,7 +144,6 @@ class NBADataCollector:
         logger.info("Collecting all NBA teams")
         all_teams = teams.get_teams()
         
-        # Save to file
         with open(f"{self.output_dir}/all_teams.json", "w") as f:
             json.dump(all_teams, f)
         
@@ -343,66 +335,109 @@ class NBADataCollector:
         
         return self._get_with_cache(cache_key, fetch_team_game_log)
     
-    def collect_data_for_all_players(self, limit: Optional[int] = None) -> None:
+    def _already_collected_ids(self, prefix: str) -> set:
         """
-        Collect data for all NBA players.
-        
+        Return a set of player or team IDs for which data files already exist.
+        """
+        ids = set()
+        if not os.path.exists(self.output_dir):
+            return ids
+        for fname in os.listdir(self.output_dir):
+            if fname.startswith(prefix) and fname.endswith('.json'):
+                try:
+                    id_part = fname[len(prefix):-5]
+                    ids.add(int(id_part))
+                except Exception:
+                    continue
+        return ids
+
+    def collect_data_for_all_players(self, limit: Optional[int] = None, max_workers: int = 2, timeout_tracker=None) -> None:
+        """
+        Collect data for all NBA players concurrently, skipping already collected ones.
         Args:
             limit: Optional limit on number of players to process
+            max_workers: Number of concurrent threads
+            timeout_tracker: dict for tracking timeouts/errors
         """
         all_players = self.collect_all_players()
-        
         if limit:
             all_players = all_players[:limit]
-        
-        for player in tqdm(all_players, desc="Collecting player data"):
+        already_collected = self._already_collected_ids('player_')
+        players_to_process = [p for p in all_players if p['id'] not in already_collected]
+        if not players_to_process:
+            logger.info("All player data already collected. Skipping.")
+            return
+
+        def process_player(player):
             player_id = player["id"]
             try:
-                # Collect player info
+                time.sleep(random.uniform(1.0, 2.5))
                 player_info = self.collect_player_info(player_id)
-                
-                # Collect career stats
                 career_stats = self.collect_player_career_stats(player_id)
-                
-                # Save to file
                 with open(f"{self.output_dir}/player_{player_id}.json", "w") as f:
                     json.dump({
                         "player": player,
                         "info": player_info,
                         "career_stats": career_stats
                     }, f)
-                
                 logger.info(f"Collected data for player {player['full_name']} (ID: {player_id})")
             except Exception as e:
                 logger.error(f"Error collecting data for player {player['full_name']} (ID: {player_id}): {e}")
-    
-    def collect_data_for_all_teams(self) -> None:
+                if timeout_tracker is not None:
+                    timeout_tracker['count'] += 1
+
+        timeout_tracker = {'count': 0}
+        max_timeouts = 10
+        timeout_window = 30  # Check after every 30 players
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for i, _ in enumerate(tqdm(executor.map(process_player, players_to_process), total=len(players_to_process), desc="Collecting player data (concurrent)")):
+                if (i + 1) % timeout_window == 0:
+                    if timeout_tracker['count'] >= max_timeouts:
+                        logger.error(f"Too many timeouts/errors ({timeout_tracker['count']}) in last {timeout_window} players. Aborting collection and saving progress.")
+                        break
+                    timeout_tracker['count'] = 0  # Reset for next window
+
+    def collect_data_for_all_teams(self, max_workers: int = 2, timeout_tracker=None) -> None:
         """
-        Collect data for all NBA teams.
+        Collect data for all NBA teams concurrently, skipping already collected ones.
+        Args:
+            max_workers: Number of concurrent threads
+            timeout_tracker: dict for tracking timeouts/errors
         """
         all_teams = self.collect_all_teams()
-        
-        for team in tqdm(all_teams, desc="Collecting team data"):
+        already_collected = self._already_collected_ids('team_')
+        teams_to_process = [t for t in all_teams if t['id'] not in already_collected]
+        if not teams_to_process:
+            logger.info("All team data already collected. Skipping.")
+            return
+        def process_team(team):
             team_id = team["id"]
             try:
-                # Collect team details
+                time.sleep(random.uniform(1.0, 2.5))
                 team_details = self.collect_team_details(team_id)
-                
-                # Collect team history
                 team_history = self.collect_team_history(team_id)
-                
-                # Save to file
                 with open(f"{self.output_dir}/team_{team_id}.json", "w") as f:
                     json.dump({
                         "team": team,
                         "details": team_details,
                         "history": team_history
                     }, f)
-                
                 logger.info(f"Collected data for team {team['full_name']} (ID: {team_id})")
             except Exception as e:
                 logger.error(f"Error collecting data for team {team['full_name']} (ID: {team_id}): {e}")
-    
+                if timeout_tracker is not None:
+                    timeout_tracker['count'] += 1
+        timeout_tracker = {'count': 0}
+        max_timeouts = 5
+        timeout_window = 10
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for i, _ in enumerate(tqdm(executor.map(process_team, teams_to_process), total=len(teams_to_process), desc="Collecting team data (concurrent)")):
+                if (i + 1) % timeout_window == 0:
+                    if timeout_tracker['count'] >= max_timeouts:
+                        logger.error(f"Too many timeouts/errors ({timeout_tracker['count']}) in last {timeout_window} teams. Aborting collection and saving progress.")
+                        break
+                    timeout_tracker['count'] = 0
+
     def collect_league_data(self, seasons: List[str] = ["2023-24"]) -> None:
         """
         Collect league-wide data for specified seasons.
@@ -412,17 +447,14 @@ class NBADataCollector:
         """
         for season in tqdm(seasons, desc="Collecting league data"):
             try:
-                # Collect standings
                 standings = self.collect_standings(season)
                 
-                # Collect league leaders for various stat categories
                 stat_categories = ["PTS", "REB", "AST", "STL", "BLK", "FG_PCT", "FT_PCT", "FG3_PCT"]
                 leaders = {}
                 
                 for stat in stat_categories:
                     leaders[stat] = self.collect_league_leaders(season, stat)
                 
-                # Save to file
                 with open(f"{self.output_dir}/league_{season}.json", "w") as f:
                     json.dump({
                         "season": season,
@@ -442,14 +474,11 @@ class NBADataCollector:
             days_back: Number of days to look back
         """
         try:
-            # Collect recent games
             recent_games = self.collect_recent_games(days_back)
             
-            # Extract game IDs
             games = recent_games.get("GameHeader", [])
             game_ids = [game.get("GAME_ID") for game in games if game.get("GAME_ID")]
             
-            # Collect details for each game
             game_details = {}
             
             for game_id in tqdm(game_ids, desc="Collecting game details"):
@@ -458,7 +487,6 @@ class NBADataCollector:
                 except Exception as e:
                     logger.error(f"Error collecting details for game {game_id}: {e}")
             
-            # Save to file
             with open(f"{self.output_dir}/recent_games.json", "w") as f:
                 json.dump({
                     "games": recent_games,
@@ -475,40 +503,25 @@ class NBADataCollector:
                       collect_league: bool = True,
                       collect_games: bool = True,
                       player_limit: Optional[int] = None,
-                      seasons: List[str] = ["2023-24"]) -> None:
+                      seasons: List[str] = ["2023-24"],
+                      max_workers: int = 2) -> None:
         """
-        Run the data collection process.
-        
-        Args:
-            collect_players: Whether to collect player data
-            collect_teams: Whether to collect team data
-            collect_league: Whether to collect league data
-            collect_games: Whether to collect game data
-            player_limit: Optional limit on number of players to process
-            seasons: List of NBA seasons to collect data for
+        Run the data collection process with checkpointing and error handling.
         """
         start_time = time.time()
         logger.info("Starting NBA data collection")
-        
         if collect_players:
-            self.collect_data_for_all_players(limit=player_limit)
-        
+            self.collect_data_for_all_players(limit=player_limit, max_workers=max_workers)
         if collect_teams:
-            self.collect_data_for_all_teams()
-        
+            self.collect_data_for_all_teams(max_workers=max_workers)
         if collect_league:
             self.collect_league_data(seasons=seasons)
-        
         if collect_games:
             self.collect_recent_game_data()
-        
         elapsed_time = time.time() - start_time
         logger.info(f"NBA data collection completed in {elapsed_time:.2f} seconds")
 
 
 if __name__ == "__main__":
-    # Create collector
     collector = NBADataCollector()
-    
-    # Run collection with limited player data for testing
-    collector.run_collection(player_limit=10)
+    collector.run_collection(player_limit=None, max_workers=2)
