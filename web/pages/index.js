@@ -1,4 +1,10 @@
 import { useState, useRef, useEffect } from "react";
+import { FaBasketballBall, FaSearch } from "react-icons/fa";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import ChatMessage from "../components/ChatMessage";
+import ChatInput from "../components/ChatInput";
+import LoadingDots from "../components/LoadingDots";
 
 function parseSteps(answer) {
   if (!answer) return [];
@@ -24,10 +30,18 @@ export default function Home() {
   const [streamedSteps, setStreamedSteps] = useState([]);
   const [showSources, setShowSources] = useState(null);
   const chatEndRef = useRef(null);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, streamedSteps]);
+
+  // Hide welcome message when user sends first message
+  useEffect(() => {
+    if (messages.length > 0) {
+      setShowWelcome(false);
+    }
+  }, [messages]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -97,93 +111,75 @@ export default function Home() {
   }
 
   return (
-    <main style={{ maxWidth: 600, margin: "40px auto", padding: 24 }}>
-      <h1 style={{ textAlign: "center", marginBottom: 24 }}>OpenMuse RAG Chatbot</h1>
-      <div
-        style={{
-          background: "#f7f7fa",
-          borderRadius: 16,
-          minHeight: 320,
-          maxHeight: 480,
-          overflowY: "auto",
-          padding: 16,
-          marginBottom: 24,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          display: "flex",
-          flexDirection: "column"
-        }}
-      >
-        {messages.map((msg, i) =>
-          msg.role === "assistant" && msg.steps && msg.steps.length > 1 ? (
-            <div key={i} className="bubble bubble-assistant" style={{ alignSelf: "flex-start" }}>
-              <div style={{ flex: 1 }}>
-                {msg.steps.map((step, j) => (
-                  <div key={j} className="step-card">
-                    <span className="step-label">Step {j + 1}:</span> {step}
-                  </div>
-                ))}
-                {showSources && i === messages.length - 1 && (
-                  <div style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>
-                    <b>Sources:</b>
-                    <ul style={{ margin: 0, paddingLeft: 16 }}>
-                      {showSources.map((src, j) => (
-                        <li key={j}>{src.text.slice(0, 90)}{src.text.length > 90 ? "..." : ""}</li>
-                      ))}
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100">
+      <Header />
+      
+      <main className="flex-grow container mx-auto px-4 py-6 max-w-4xl">
+        {/* Chat container with court background */}
+        <div className="relative bg-white rounded-xl shadow-nba overflow-hidden border-2 border-nba-blue">
+          {/* Top scoreboard-like bar */}
+          <div className="bg-gradient-to-r from-nba-blue to-nba-red p-3 flex justify-between items-center">
+            <div className="flex items-center">
+              <FaBasketballBall className="text-white mr-2" />
+              <span className="text-white font-scoreboard">NBA CHAT</span>
+            </div>
+            <div className="text-white font-scoreboard">
+              {messages.length} MESSAGES
+            </div>
+          </div>
+          
+          {/* Messages area with court texture background */}
+          <div 
+            className="h-[500px] overflow-y-auto p-4 bg-court bg-opacity-10"
+            style={{
+              backgroundImage: "url('/court-bg.svg')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundBlendMode: "overlay"
+            }}
+          >
+            {showWelcome && (
+              <div className="flex justify-center items-center h-full">
+                <div className="bg-white bg-opacity-90 p-6 rounded-xl shadow-lg max-w-md text-center border-2 border-lakers-gold">
+                  <FaBasketballBall className="text-ball-orange text-4xl mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-nba-blue mb-3">Welcome to NBA Insight Assist!</h2>
+                  <p className="text-gray-700 mb-4">
+                    Your AI assistant for all things NBA. Ask me about players, teams, stats, history, or anything basketball related!
+                  </p>
+                  <div className="bg-gray-100 p-3 rounded-lg text-left">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Try asking:</p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Who is the all-time scoring leader?</li>
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Compare LeBron James and Michael Jordan</li>
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Which team has the most championships?</li>
                     </ul>
                   </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div key={i} className={`bubble bubble-${msg.role}`} style={{ alignSelf: msg.role === "user" ? "flex-end" : "flex-start" }}>
-              <div className="bubble-content">{msg.content}</div>
-              {msg.sources && (
-                <div style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>
-                  <b>Sources:</b>
-                  <ul style={{ margin: 0, paddingLeft: 16 }}>
-                    {msg.sources.map((src, j) => (
-                      <li key={j}>{src.text.slice(0, 90)}{src.text.length > 90 ? "..." : ""}</li>
-                    ))}
-                  </ul>
                 </div>
-              )}
-            </div>
-          )
-        )}
-        {loading && (
-          <div className="typing">
-            <span>Thinking{Array(3).fill(0).map((_, i) => <span key={i}>.</span>)}</span>
+              </div>
+            )}
+            
+            {messages.map((msg, i) => (
+              <ChatMessage key={i} message={msg} />
+            ))}
+            
+            {loading && <LoadingDots />}
+            
+            <div ref={chatEndRef} />
           </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
-      <form onSubmit={sendMessage} style={{ display: "flex", gap: 8 }}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question..."
-          style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid #ccc", fontSize: 16 }}
-          disabled={loading}
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          style={{ background: "#0078fe", color: "#fff", border: "none", borderRadius: 8, padding: "0 20px", fontSize: 16, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer" }}
-        >
-          Send
-        </button>
-      </form>
-      <style>{`
-        .typing span {
-          animation: blink 1.2s infinite;
-        }
-        .typing span:nth-child(2) { animation-delay: 0.2s; }
-        .typing span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.2; }
-        }
-      `}</style>
-    </main>
+          
+          {/* Input area with court-side styling */}
+          <div className="p-4 bg-gray-100 border-t-2 border-nba-blue">
+            <ChatInput 
+              input={input} 
+              setInput={setInput} 
+              handleSubmit={sendMessage} 
+              loading={loading} 
+            />
+          </div>
+        </div>
+      </main>
+      
+      <Footer />
+    </div>
   );
 }

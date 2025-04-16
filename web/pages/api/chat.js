@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: `You are an assistant providing step-by-step reasoning and answers.\n
+        { role: "system", content: `You are a helpful NBA Insight Assistant providing answers using step-by-step reasoning.\n
           Use the provided context to answer. If the question is complex, break it down into steps and explain each step in detail.\n
           If you need to search the web, use the search function. If you don't know the answer, say so.\n
           Do not add any additional detail that does not directly answer the question unless otherwise told to do so.\n
