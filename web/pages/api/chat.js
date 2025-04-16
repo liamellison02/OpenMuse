@@ -18,9 +18,14 @@ export default async function handler(req, res) {
     // 3. Call OpenAI
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: "You are a helpful assistant. Use the provided context to answer." },
+        { role: "system", content: `You are an assistant providing step-by-step reasoning and answers.\n
+          Use the provided context to answer. If the question is complex, break it down into steps and explain each step in detail.\n
+          If you need to search the web, use the search function. If you don't know the answer, say so.\n
+          Do not add any additional detail that does not directly answer the question unless otherwise told to do so.\n
+          If you are asked to provide sources, only provide the sources that are directly relevant to the question.\n
+          ` },
         { role: "user", content: `Context:\n${context}\n\nUser: ${query}` }
       ]
     });
