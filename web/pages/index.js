@@ -6,16 +6,35 @@ import ChatMessage from "../components/ChatMessage";
 import ChatInput from "../components/ChatInput";
 import LoadingDots from "../components/LoadingDots";
 
+function parseSteps(answer) {
+  if (!answer) return [];
+  const lines = answer.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const steps = [];
+  let current = "";
+  for (let line of lines) {
+    if (/^(\d+\.|[-•]) /.test(line)) {
+      if (current) steps.push(current);
+      current = line.replace(/^(\d+\.|[-•]) /, "");
+    } else {
+      current += (current ? " " : "") + line;
+    }
+  }
+  if (current) steps.push(current);
+  return steps.length > 1 ? steps : [answer];
+}
+
 export default function Home() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamedSteps, setStreamedSteps] = useState([]);
+  const [showSources, setShowSources] = useState(null);
   const chatEndRef = useRef(null);
   const [showWelcome, setShowWelcome] = useState(true);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, streamedSteps]);
 
   // Hide welcome message when user sends first message
   useEffect(() => {
@@ -30,19 +49,66 @@ export default function Home() {
     const userMsg = { role: "user", content: input };
     setMessages((msgs) => [...msgs, userMsg]);
     setLoading(true);
-    const res = await fetch("/api/chat", {
+    setStreamedSteps([]);
+    setShowSources(null);
+
+    let answer = "";
+    // Add a placeholder assistant message for streaming
+    setMessages((msgs) => [...msgs, { role: "assistant", content: "" }]);
+    await fetchEventSourceSSE("/api/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: input })
+    }, (token) => {
+      answer += token;
+      setMessages((msgs) => {
+        const updated = [...msgs];
+        // Find last assistant message and update its content
+        for (let i = updated.length - 1; i >= 0; --i) {
+          if (updated[i].role === "assistant") {
+            updated[i] = { ...updated[i], content: answer };
+            break;
+          }
+        }
+        return updated;
+      });
+    }, () => {
+      setMessages((msgs) => {
+        // After stream, parse steps for the final assistant message
+        const updated = [...msgs];
+        for (let i = updated.length - 1; i >= 0; --i) {
+          if (updated[i].role === "assistant") {
+            updated[i] = {
+              ...updated[i],
+              steps: parseSteps(answer)
+            };
+            break;
+          }
+        }
+        return updated;
+      });
+      setLoading(false);
     });
-    const data = await res.json();
-    setMessages((msgs) => [
-      ...msgs,
-      { role: "assistant", content: data.answer, sources: data.sources }
-    ]);
     setInput("");
-    setLoading(false);
   };
+
+  // Production-ready SSE polyfill using fetch-event-source
+  async function fetchEventSourceSSE(url, options, onToken, onEnd) {
+    const { fetchEventSource } = await import("@microsoft/fetch-event-source");
+    await fetchEventSource(url, {
+      ...options,
+      onmessage(ev) {
+        if (!ev.data) return;
+        try {
+          const { token } = JSON.parse(ev.data);
+          if (token) onToken(token);
+        } catch {}
+      },
+      onclose() { onEnd(); },
+      onerror(err) { onEnd(); },
+      openWhenHidden: true
+    });
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100">
