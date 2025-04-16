@@ -1,14 +1,28 @@
 import { useState, useRef, useEffect } from "react";
+import { FaBasketballBall, FaSearch } from "react-icons/fa";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+import ChatMessage from "../components/ChatMessage";
+import ChatInput from "../components/ChatInput";
+import LoadingDots from "../components/LoadingDots";
 
 export default function Home() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Hide welcome message when user sends first message
+  useEffect(() => {
+    if (messages.length > 0) {
+      setShowWelcome(false);
+    }
+  }, [messages]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -31,111 +45,75 @@ export default function Home() {
   };
 
   return (
-    <main style={{ maxWidth: 600, margin: "40px auto", padding: 24 }}>
-      <h1 style={{ textAlign: "center", marginBottom: 24 }}>OpenMuse RAG Chatbot</h1>
-      <div
-        style={{
-          background: "#f7f7fa",
-          borderRadius: 16,
-          minHeight: 320,
-          maxHeight: 480,
-          overflowY: "auto",
-          padding: 16,
-          marginBottom: 24,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          display: "flex",
-          flexDirection: "column"
-        }}
-      >
-        {messages.map((msg, i) => (
-          <div
-            key={i}
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-gray-100">
+      <Header />
+      
+      <main className="flex-grow container mx-auto px-4 py-6 max-w-4xl">
+        {/* Chat container with court background */}
+        <div className="relative bg-white rounded-xl shadow-nba overflow-hidden border-2 border-nba-blue">
+          {/* Top scoreboard-like bar */}
+          <div className="bg-gradient-to-r from-nba-blue to-nba-red p-3 flex justify-between items-center">
+            <div className="flex items-center">
+              <FaBasketballBall className="text-white mr-2" />
+              <span className="text-white font-scoreboard">NBA CHAT</span>
+            </div>
+            <div className="text-white font-scoreboard">
+              {messages.length} MESSAGES
+            </div>
+          </div>
+          
+          {/* Messages area with court texture background */}
+          <div 
+            className="h-[500px] overflow-y-auto p-4 bg-court bg-opacity-10"
             style={{
-              alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "80%",
-              margin: "8px 0",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4
+              backgroundImage: "url('/court-bg.svg')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundBlendMode: "overlay"
             }}
           >
-            <div
-              style={{
-                background: msg.role === "user" ? "#0078fe" : "#fff",
-                color: msg.role === "user" ? "#fff" : "#222",
-                borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                padding: "12px 16px",
-                fontSize: 16,
-                boxShadow: msg.role === "user"
-                  ? "0 2px 6px rgba(0,120,254,0.08)"
-                  : "0 2px 6px rgba(0,0,0,0.04)",
-                wordBreak: "break-word"
-              }}
-            >
-              {msg.content}
-            </div>
-            {msg.sources && (
-              <div style={{ fontSize: 12, color: "#666", marginLeft: 8 }}>
-                <b>Sources:</b>
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {msg.sources.map((src, j) => (
-                    <li key={j}>{src.text.slice(0, 80)}...</li>
-                  ))}
-                </ul>
+            {showWelcome && (
+              <div className="flex justify-center items-center h-full">
+                <div className="bg-white bg-opacity-90 p-6 rounded-xl shadow-lg max-w-md text-center border-2 border-lakers-gold">
+                  <FaBasketballBall className="text-ball-orange text-4xl mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-nba-blue mb-3">Welcome to NBA Insight Assist!</h2>
+                  <p className="text-gray-700 mb-4">
+                    Your AI assistant for all things NBA. Ask me about players, teams, stats, history, or anything basketball related!
+                  </p>
+                  <div className="bg-gray-100 p-3 rounded-lg text-left">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Try asking:</p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Who is the all-time scoring leader?</li>
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Compare LeBron James and Michael Jordan</li>
+                      <li className="flex items-center"><FaSearch className="text-nba-red mr-2" /> Which team has the most championships?</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
+            
+            {messages.map((msg, i) => (
+              <ChatMessage key={i} message={msg} />
+            ))}
+            
+            {loading && <LoadingDots />}
+            
+            <div ref={chatEndRef} />
           </div>
-        ))}
-        {loading && (
-          <div
-            style={{
-              alignSelf: "flex-start",
-              color: "#888",
-              fontStyle: "italic",
-              margin: "8px 0 0 0"
-            }}
-          >
-            Bot is thinking...
+          
+          {/* Input area with court-side styling */}
+          <div className="p-4 bg-gray-100 border-t-2 border-nba-blue">
+            <ChatInput 
+              input={input} 
+              setInput={setInput} 
+              handleSubmit={sendMessage} 
+              loading={loading} 
+            />
           </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
-      <form onSubmit={sendMessage} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Ask a question..."
-          style={{
-            flex: 1,
-            padding: "12px 14px",
-            borderRadius: 24,
-            border: "1px solid #ddd",
-            fontSize: 16,
-            outline: "none",
-            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-            transition: "border 0.2s"
-          }}
-          disabled={loading}
-          autoFocus
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          style={{
-            padding: "10px 24px",
-            borderRadius: 24,
-            background: loading || !input.trim() ? "#ccc" : "#0078fe",
-            color: "#fff",
-            border: "none",
-            fontWeight: 600,
-            fontSize: 16,
-            cursor: loading || !input.trim() ? "not-allowed" : "pointer",
-            transition: "background 0.2s"
-          }}
-        >
-          Send
-        </button>
-      </form>
-    </main>
+        </div>
+      </main>
+      
+      <Footer />
+    </div>
   );
 }

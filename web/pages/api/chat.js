@@ -18,9 +18,9 @@ export default async function handler(req, res) {
     // 3. Call OpenAI
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are a helpful assistant. Use the provided context to answer." },
+        { role: "system", content: "You are a helpful NBA Insight Assistant. Use the provided context to answer." },
         { role: "user", content: `Context:\n${context}\n\nUser: ${query}` }
       ]
     });
