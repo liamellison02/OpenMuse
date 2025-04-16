@@ -54,7 +54,6 @@ class NBAEmbeddingsGenerator:
         self.embedding_model = embedding_model
         os.makedirs(output_dir, exist_ok=True)
         
-        # Initialize OpenAI client
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
         if not os.getenv("OPENAI_API_KEY"):
@@ -101,11 +100,9 @@ class NBAEmbeddingsGenerator:
         """
         all_embeddings = []
         
-        # Process in batches
         for i in range(0, len(texts), batch_size):
             batch = texts[i:i+batch_size]
             
-            # Retry logic
             for attempt in range(retry_limit):
                 try:
                     response = self.client.embeddings.create(
@@ -113,14 +110,12 @@ class NBAEmbeddingsGenerator:
                         input=batch
                     )
                     
-                    # Sort embeddings by index to maintain order
                     sorted_embeddings = sorted(response.data, key=lambda x: x.index)
                     batch_embeddings = [item.embedding for item in sorted_embeddings]
                     
                     all_embeddings.extend(batch_embeddings)
                     
-                    # Add delay to avoid rate limiting
-                    time.sleep(0.5)
+                    time.sleep(0.5) # delay for rate limiting
                     break
                 except Exception as e:
                     logger.warning(f"Error in batch {i//batch_size} (attempt {attempt+1}/{retry_limit}): {e}")
@@ -130,7 +125,6 @@ class NBAEmbeddingsGenerator:
                         time.sleep(retry_delay)
                     else:
                         logger.error(f"Failed to generate embeddings for batch {i//batch_size} after {retry_limit} attempts")
-                        # Add empty embeddings as placeholders
                         all_embeddings.extend([[] for _ in range(len(batch))])
         
         return all_embeddings
@@ -148,7 +142,6 @@ class NBAEmbeddingsGenerator:
         logger.info(f"Processing file: {filename}")
         
         try:
-            # Load documents
             with open(f"{self.data_dir}/{filename}", "r") as f:
                 documents = json.load(f)
             
@@ -156,22 +149,17 @@ class NBAEmbeddingsGenerator:
                 logger.warning(f"No documents found in {filename}")
                 return []
             
-            # Extract texts
             texts = [doc["text"] for doc in documents]
             
-            # Generate embeddings
             logger.info(f"Generating embeddings for {len(texts)} documents")
             embeddings = self.generate_embeddings_batch(texts)
             
-            # Add embeddings to documents
             for i, embedding in enumerate(embeddings):
-                if embedding:  # Skip empty embeddings (failed API calls)
+                if embedding:  # null embeddings = failed api call
                     documents[i]["embedding"] = embedding
             
-            # Filter out documents without embeddings
             documents_with_embeddings = [doc for doc in documents if "embedding" in doc]
             
-            # Save documents with embeddings
             output_filename = f"embedded_{filename}"
             with open(f"{self.output_dir}/{output_filename}", "w") as f:
                 json.dump(documents_with_embeddings, f)
@@ -194,14 +182,12 @@ class NBAEmbeddingsGenerator:
         
         all_documents = []
         
-        # Get all JSON files
         json_files = [f for f in os.listdir(self.data_dir) if f.endswith(".json")]
         
         for filename in tqdm(json_files, desc="Processing files"):
             documents = self.process_file(filename)
             all_documents.extend(documents)
         
-        # Save all documents with embeddings
         with open(f"{self.output_dir}/all_embedded_data.json", "w") as f:
             json.dump(all_documents, f)
         
@@ -221,7 +207,6 @@ class NBAEmbeddingsGenerator:
         logger.info(f"Processing combined file: {filename}")
         
         try:
-            # Load documents
             with open(f"{self.data_dir}/{filename}", "r") as f:
                 documents = json.load(f)
             
@@ -229,22 +214,17 @@ class NBAEmbeddingsGenerator:
                 logger.warning(f"No documents found in {filename}")
                 return []
             
-            # Extract texts
             texts = [doc["text"] for doc in documents]
             
-            # Generate embeddings
             logger.info(f"Generating embeddings for {len(texts)} documents")
             embeddings = self.generate_embeddings_batch(texts)
             
-            # Add embeddings to documents
             for i, embedding in enumerate(embeddings):
-                if embedding:  # Skip empty embeddings (failed API calls)
+                if embedding:
                     documents[i]["embedding"] = embedding
             
-            # Filter out documents without embeddings
             documents_with_embeddings = [doc for doc in documents if "embedding" in doc]
             
-            # Save documents with embeddings
             output_filename = f"all_embedded_data.json"
             with open(f"{self.output_dir}/{output_filename}", "w") as f:
                 json.dump(documents_with_embeddings, f)
@@ -258,8 +238,5 @@ class NBAEmbeddingsGenerator:
 
 
 if __name__ == "__main__":
-    # Create generator
-    generator = NBAEmbeddingsGenerator()
-    
-    # Process combined file
+    generator = NBAEmbeddingsGenerator() 
     generator.process_combined_file()

@@ -18,7 +18,6 @@ import numpy as np
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,7 +28,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 class NBADataProcessor:
@@ -50,7 +48,6 @@ class NBADataProcessor:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        # Load team and player data for reference
         self._load_reference_data()
         
         logger.info("NBA Data Processor initialized")
@@ -60,18 +57,14 @@ class NBADataProcessor:
         Load reference data for teams and players.
         """
         try:
-            # Load teams
             with open(f"{self.data_dir}/all_teams.json", "r") as f:
                 self.teams = json.load(f)
             
-            # Create team lookup by ID
             self.team_lookup = {team["id"]: team for team in self.teams}
             
-            # Load players
             with open(f"{self.data_dir}/all_players.json", "r") as f:
                 self.players = json.load(f)
             
-            # Create player lookup by ID
             self.player_lookup = {player["id"]: player for player in self.players}
             
             logger.info(f"Loaded reference data: {len(self.teams)} teams, {len(self.players)} players")
@@ -90,17 +83,14 @@ class NBADataProcessor:
             Formatted text about the player
         """
         try:
-            # Load player data
             with open(f"{self.data_dir}/player_{player_id}.json", "r") as f:
                 player_data = json.load(f)
             
             player = player_data["player"]
             info = player_data["info"]
             
-            # Extract common player info
             common_info = info.get("CommonPlayerInfo", [{}])[0] if "CommonPlayerInfo" in info else {}
             
-            # Format text
             name = player.get("full_name", "")
             position = common_info.get("POSITION", "")
             height = common_info.get("HEIGHT", "")
@@ -112,11 +102,9 @@ class NBADataProcessor:
             draft_round = common_info.get("DRAFT_ROUND", "")
             draft_number = common_info.get("DRAFT_NUMBER", "")
             
-            # Get current team
             team_id = common_info.get("TEAM_ID")
             team_name = self.team_lookup.get(team_id, {}).get("full_name", "") if team_id else ""
             
-            # Format draft info
             draft_info = ""
             if draft_year and draft_round and draft_number:
                 if draft_round == "1" and draft_number == "1":
@@ -129,7 +117,6 @@ class NBADataProcessor:
                 else:
                     draft_info += "."
             
-            # Format text
             text = f"{name} is a professional basketball player"
             
             if team_name:
@@ -188,17 +175,14 @@ class NBADataProcessor:
             Formatted text about the player's career statistics
         """
         try:
-            # Load player data
             with open(f"{self.data_dir}/player_{player_id}.json", "r") as f:
                 player_data = json.load(f)
             
             player = player_data["player"]
             career_stats = player_data["career_stats"]
             
-            # Get player name
             name = player.get("full_name", "")
             
-            # Extract career totals
             career_totals = []
             if "CareerTotalsRegularSeason" in career_stats:
                 career_totals = career_stats["CareerTotalsRegularSeason"]
@@ -206,29 +190,51 @@ class NBADataProcessor:
             if not career_totals:
                 return f"{name} has no recorded career statistics in the NBA."
             
-            # Get the first (and only) row of career totals
             totals = career_totals[0] if career_totals else {}
             
-            # Calculate career averages
-            games = totals.get("GP", 0)
-            seasons = totals.get("SEASON_COUNT", 0)
+            def safe_stat(key):
+                val = totals.get(key, 0)
+                return 0 if val is None else val
+            
+            games = safe_stat("GP")
+            seasons = safe_stat("SEASON_COUNT")
             
             if games == 0:
                 return f"{name} has not played any games in the NBA."
             
-            ppg = round(totals.get("PTS", 0) / games, 1)
-            rpg = round(totals.get("REB", 0) / games, 1)
-            apg = round(totals.get("AST", 0) / games, 1)
-            spg = round(totals.get("STL", 0) / games, 1)
-            bpg = round(totals.get("BLK", 0) / games, 1)
+            def avg_stat(key):
+                val = totals.get(key, None)
+                if val is None or games == 0:
+                    return "N/A"
+                try:
+                    return round(val / games, 1)
+                except Exception:
+                    return "N/A"
             
-            # Calculate shooting percentages
-            fg_pct = round(totals.get("FG_PCT", 0) * 100, 1)
-            fg3_pct = round(totals.get("FG3_PCT", 0) * 100, 1)
-            ft_pct = round(totals.get("FT_PCT", 0) * 100, 1)
+            def pct_stat(key):
+                val = totals.get(key, None)
+                if val is None:
+                    return "N/A"
+                try:
+                    return round(val * 100, 1)
+                except Exception:
+                    return "N/A"
             
-            # Format text
-            text = f"{name} Career NBA Statistics: {ppg} points per game, {rpg} rebounds per game, {apg} assists per game, {spg} steals per game, {bpg} blocks per game, {fg_pct}% field goal percentage, {fg3_pct}% three-point percentage, {ft_pct}% free throw percentage"
+            ppg = avg_stat("PTS")
+            rpg = avg_stat("REB")
+            apg = avg_stat("AST")
+            spg = avg_stat("STL")
+            bpg = avg_stat("BLK")
+            fg_pct = pct_stat("FG_PCT")
+            fg3_pct = pct_stat("FG3_PCT")
+            ft_pct = pct_stat("FT_PCT")
+            
+            text = (
+                f"{name} Career NBA Statistics: "
+                f"{ppg} points per game, {rpg} rebounds per game, {apg} assists per game, "
+                f"{spg} steals per game, {bpg} blocks per game, "
+                f"{fg_pct}% field goal percentage, {fg3_pct}% three-point percentage, {ft_pct}% free throw percentage"
+            )
             
             if seasons > 0:
                 if seasons == 1:
@@ -254,51 +260,59 @@ class NBADataProcessor:
             List of formatted texts about the player's season statistics
         """
         try:
-            # Load player data
             with open(f"{self.data_dir}/player_{player_id}.json", "r") as f:
                 player_data = json.load(f)
             
             player = player_data["player"]
             career_stats = player_data["career_stats"]
             
-            # Get player name
             name = player.get("full_name", "")
             
-            # Extract season stats
             season_stats = []
             if "SeasonTotalsRegularSeason" in career_stats:
                 season_stats = career_stats["SeasonTotalsRegularSeason"]
             
             if not season_stats:
-                return [f"{name} has no recorded season statistics in the NBA."]
+                return [f"No season statistics available for {name}."]
             
-            # Format text for each season
             texts = []
-            
             for season in season_stats:
                 season_id = season.get("SEASON_ID", "")
-                team_id = season.get("TEAM_ID")
-                team_name = self.team_lookup.get(team_id, {}).get("full_name", "") if team_id else "N/A"
-                
+                team_name = season.get("TEAM_ABBREVIATION", "Unknown Team")
                 games = season.get("GP", 0)
                 
-                if games == 0:
-                    continue
+                def avg_stat(key):
+                    val = season.get(key, None)
+                    if val is None or games == 0:
+                        return "N/A"
+                    try:
+                        return round(val / games, 1)
+                    except Exception:
+                        return "N/A"
                 
-                ppg = round(season.get("PTS", 0) / games, 1)
-                rpg = round(season.get("REB", 0) / games, 1)
-                apg = round(season.get("AST", 0) / games, 1)
-                spg = round(season.get("STL", 0) / games, 1)
-                bpg = round(season.get("BLK", 0) / games, 1)
+                def pct_stat(key):
+                    val = season.get(key, None)
+                    if val is None:
+                        return "N/A"
+                    try:
+                        return round(val * 100, 1)
+                    except Exception:
+                        return "N/A"
                 
-                # Calculate shooting percentages
-                fg_pct = round(season.get("FG_PCT", 0) * 100, 1)
-                fg3_pct = round(season.get("FG3_PCT", 0) * 100, 1)
-                ft_pct = round(season.get("FT_PCT", 0) * 100, 1)
+                ppg = avg_stat("PTS")
+                rpg = avg_stat("REB")
+                apg = avg_stat("AST")
+                spg = avg_stat("STL")
+                bpg = avg_stat("BLK")
+                fg_pct = pct_stat("FG_PCT")
+                fg3_pct = pct_stat("FG3_PCT")
+                ft_pct = pct_stat("FT_PCT")
                 
-                # Format text
-                text = f"In the {season_id} NBA season, {name} played for the {team_name} and averaged {ppg} points, {rpg} rebounds, {apg} assists, {spg} steals, and {bpg} blocks per game while shooting {fg_pct}% from the field, {fg3_pct}% from three-point range, and {ft_pct}% from the free throw line across {games} games."
-                
+                text = (
+                    f"In the {season_id} NBA season, {name} played for the {team_name} and averaged "
+                    f"{ppg} points, {rpg} rebounds, {apg} assists, {spg} steals, and {bpg} blocks per game "
+                    f"while shooting {fg_pct}% from the field, {fg3_pct}% from three-point range, and {ft_pct}% from the free throw line across {games} games."
+                )
                 texts.append(text)
             
             return texts

@@ -65,16 +65,15 @@ class NBADatabasePopulator:
         self.collection_name = collection_name
         self.index_name = index_name
         
-        # Create directories
         os.makedirs(raw_data_dir, exist_ok=True)
         os.makedirs(processed_data_dir, exist_ok=True)
         os.makedirs(embeddings_dir, exist_ok=True)
         
-        # Initialize components
         self.collector = NBADataCollector(output_dir=raw_data_dir)
-        # Ensure reference data exists before initializing processor
+
         self.collector.collect_all_teams()
         self.collector.collect_all_players()
+
         self.processor = NBADataProcessor(data_dir=raw_data_dir, output_dir=processed_data_dir)
         self.embedder = NBAEmbeddingsGenerator(data_dir=processed_data_dir, output_dir=embeddings_dir)
         self.connector = NBAMongoDBConnector(
@@ -121,7 +120,6 @@ class NBADatabasePopulator:
             logger.info("Starting data collection")
             start_time = time.time()
             
-            # Run collection
             self.collector.run_collection(
                 player_limit=player_limit,
                 seasons=seasons
@@ -148,7 +146,6 @@ class NBADatabasePopulator:
             logger.info("Starting data processing")
             start_time = time.time()
             
-            # Process all data
             self.processor.process_all_data(player_limit=player_limit)
             
             elapsed_time = time.time() - start_time
@@ -169,7 +166,6 @@ class NBADatabasePopulator:
             logger.info("Starting embedding generation")
             start_time = time.time()
             
-            # Generate embeddings
             self.embedder.process_combined_file()
             
             elapsed_time = time.time() - start_time
@@ -193,7 +189,6 @@ class NBADatabasePopulator:
             logger.info("Starting database upload")
             start_time = time.time()
             
-            # Upload to database
             uploaded = self.connector.upload_combined_file(clear_first=clear_first)
             
             if uploaded > 0:
@@ -226,26 +221,21 @@ class NBADatabasePopulator:
         logger.info("Starting full pipeline")
         start_time = time.time()
         
-        # Check environment variables
         if not self.check_environment_variables():
             return False
         
-        # Collect data
         if not self.collect_data(player_limit=player_limit, seasons=seasons):
             logger.error("Data collection failed")
             return False
         
-        # Process data
         if not self.process_data(player_limit=player_limit):
             logger.error("Data processing failed")
             return False
         
-        # Generate embeddings
         if not self.generate_embeddings():
             logger.error("Embedding generation failed")
             return False
         
-        # Upload to database
         if not self.upload_to_database(clear_first=clear_first):
             logger.error("Database upload failed")
             return False
@@ -267,16 +257,13 @@ class NBADatabasePopulator:
         logger.info("Starting pipeline from processed data")
         start_time = time.time()
         
-        # Check environment variables
         if not self.check_environment_variables():
             return False
         
-        # Generate embeddings
         if not self.generate_embeddings():
             logger.error("Embedding generation failed")
             return False
         
-        # Upload to database
         if not self.upload_to_database(clear_first=clear_first):
             logger.error("Database upload failed")
             return False
@@ -298,11 +285,9 @@ class NBADatabasePopulator:
         logger.info("Starting pipeline from embeddings")
         start_time = time.time()
         
-        # Check environment variables
         if not self.check_environment_variables():
             return False
         
-        # Upload to database
         if not self.upload_to_database(clear_first=clear_first):
             logger.error("Database upload failed")
             return False

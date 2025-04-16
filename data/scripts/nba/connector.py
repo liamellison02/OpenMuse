@@ -17,7 +17,6 @@ from pymongo import MongoClient
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -28,7 +27,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
 
 class NBAMongoDBConnector:
@@ -56,14 +54,12 @@ class NBAMongoDBConnector:
         self.collection_name = collection_name
         self.index_name = index_name
         
-        # Get MongoDB URI from environment variable
         self.mongodb_uri = os.getenv("MONGODB_URI")
         
         if not self.mongodb_uri:
             logger.error("MONGODB_URI environment variable not set")
             raise ValueError("MONGODB_URI environment variable not set")
         
-        # Connect to MongoDB Atlas
         self.client = None
         self.db = None
         self.collection = None
@@ -78,16 +74,10 @@ class NBAMongoDBConnector:
             True if connection successful, False otherwise
         """
         try:
-            # Connect to MongoDB Atlas
             self.client = MongoClient(self.mongodb_uri)
-            
-            # Test connection
             self.client.admin.command('ping')
-            
-            # Get database and collection
             self.db = self.client[self.db_name]
             self.collection = self.db[self.collection_name]
-            
             logger.info(f"Connected to MongoDB Atlas: {self.db_name}.{self.collection_name}")
             return True
         except Exception as e:
@@ -110,10 +100,7 @@ class NBAMongoDBConnector:
             True if index exists, False otherwise
         """
         try:
-            # Get collection indexes
             indexes = self.collection.list_indexes()
-            
-            # Check if vector index exists
             for index in indexes:
                 if index.get("name") == self.index_name:
                     logger.info(f"Vector index '{self.index_name}' exists")
@@ -136,11 +123,9 @@ class NBAMongoDBConnector:
             True if index created or already exists, False otherwise
         """
         try:
-            # Check if index already exists
             if self.check_vector_index():
                 return True
             
-            # Create vector index
             index_definition = {
                 "name": self.index_name,
                 "definition": {
@@ -157,7 +142,6 @@ class NBAMongoDBConnector:
                 }
             }
             
-            # Create index
             self.collection.create_search_index(index_definition)
             
             logger.info(f"Created vector index '{self.index_name}' with dimension {dimension}")
@@ -198,46 +182,31 @@ class NBAMongoDBConnector:
             Number of documents uploaded
         """
         try:
-            # Connect to MongoDB Atlas
             if not self.connect():
                 return 0
-            
-            # Clear collection if requested
             if clear_first:
                 self.clear_collection()
-            
-            # Check vector index
-            if not self.check_vector_index():
-                # Create vector index
-                if not self.create_vector_index():
-                    logger.error("Failed to create vector index")
-                    return 0
-            
-            # Upload documents in batches
+            try:
+                self.check_vector_index()
+                self.create_vector_index()
+            except Exception as e:
+                logger.warning(f"Ignoring vector index error: {e}")
             total_uploaded = 0
-            
             for i in range(0, len(documents), batch_size):
                 batch = documents[i:i+batch_size]
-                
                 try:
-                    # Insert batch
                     result = self.collection.insert_many(batch)
-                    
-                    # Count inserted documents
                     inserted_count = len(result.inserted_ids)
                     total_uploaded += inserted_count
-                    
                     logger.info(f"Uploaded batch {i//batch_size + 1}/{(len(documents)-1)//batch_size + 1}: {inserted_count} documents")
                 except Exception as e:
                     logger.error(f"Error uploading batch {i//batch_size + 1}: {e}")
-            
             logger.info(f"Uploaded {total_uploaded} documents to MongoDB Atlas")
             return total_uploaded
         except Exception as e:
             logger.error(f"Error uploading documents: {e}")
             return 0
         finally:
-            # Disconnect from MongoDB Atlas
             self.disconnect()
     
     def upload_file(self, filename: str, clear_first: bool = False) -> int:
@@ -252,14 +221,23 @@ class NBAMongoDBConnector:
             Number of documents uploaded
         """
         try:
-            # Load documents
-            with open(f"{self.data_dir}/{filename}", "r") as f:
-                documents = json.load(f)
-            
-            if not documents:
-                logger.warning(f"No documents found in {filename}")
+            # Try absolute and fallback paths
+            abs_path = os.path.join(self.data_dir, filename)
+            if not os.path.exists(abs_path):
+                logger.error(f"File not found at {abs_path}, trying current directory...")
+                abs_path = filename
+            logger.info(f"Attempting to upload from file: {os.path.abspath(abs_path)}")
+            if not os.path.exists(abs_path):
+                logger.error(f"File not found at {abs_path}. Aborting upload.")
                 return 0
-            
+            with open(abs_path, "r") as f:
+                documents = json.load(f)
+            if not isinstance(documents, list):
+                logger.error(f"File {abs_path} does not contain a list of documents. Aborting upload.")
+                return 0
+            if not documents:
+                logger.warning(f"No documents found in {abs_path}")
+                return 0
             # Upload documents
             return self.upload_documents(documents, clear_first=clear_first)
         except Exception as e:
@@ -277,21 +255,17 @@ class NBAMongoDBConnector:
             Number of documents uploaded
         """
         try:
-            # Connect to MongoDB Atlas
             if not self.connect():
                 return 0
             
-            # Clear collection if requested
             if clear_first:
                 self.clear_collection()
             
-            # Get all JSON files
             json_files = [f for f in os.listdir(self.data_dir) if f.endswith(".json") and f.startswith("embedded_")]
             
             total_uploaded = 0
             
             for filename in tqdm(json_files, desc="Uploading files"):
-                # Upload file
                 uploaded = self.upload_file(filename, clear_first=False)
                 total_uploaded += uploaded
             
@@ -301,11 +275,10 @@ class NBAMongoDBConnector:
             logger.error(f"Error uploading all files: {e}")
             return 0
         finally:
-            # Disconnect from MongoDB Atlas
             self.disconnect()
     
     def upload_combined_file(self, filename: str = "all_embedded_data.json", 
-                           clear_first: bool = True) -> int:
+                           clear_first: bool = False) -> int:
         """
         Upload documents from a combined file to MongoDB Atlas.
         
@@ -317,7 +290,6 @@ class NBAMongoDBConnector:
             Number of documents uploaded
         """
         try:
-            # Upload file
             return self.upload_file(filename, clear_first=clear_first)
         except Exception as e:
             logger.error(f"Error uploading combined file {filename}: {e}")
@@ -325,8 +297,6 @@ class NBAMongoDBConnector:
 
 
 if __name__ == "__main__":
-    # Create connector
     connector = NBAMongoDBConnector()
-    
-    # Upload combined file
-    connector.upload_combined_file()
+    uploaded = connector.upload_combined_file(clear_first=False)
+    print(f"Uploaded {uploaded} documents from all_embedded_data.json")
