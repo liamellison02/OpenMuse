@@ -1,4 +1,4 @@
-# OpenMuse RAG Chatbot
+# OpenMuse AI
 
 A simple Next.js Retrieval-Augmented Generation chatbot.
 
@@ -26,7 +26,7 @@ A simple Next.js Retrieval-Augmented Generation chatbot.
 
 ## File Structure
 - `pages/index.js` – Chat UI
-- `pages/api/chat.js` – RAG API route
+- `pages/api/stream.js` – RAG API route
 - `utils/mongodb.js` – MongoDB connection helper
 - `utils/vectorSearch.js` – Embedding & vector search
 
