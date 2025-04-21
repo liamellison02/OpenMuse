@@ -22,3 +22,5 @@ nba_database_populator.log
 *.env.local
 
 __pycache__
+
+.windsurfrules
