@@ -20,8 +20,8 @@ from collector import NBADataCollector
 from processor import NBADataProcessor
 from embeddings import NBAEmbeddingsGenerator
 from connector import NBAMongoDBConnector
+from connector_turso import NBATursoConnector
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -76,12 +76,23 @@ class NBADatabasePopulator:
 
         self.processor = NBADataProcessor(data_dir=raw_data_dir, output_dir=processed_data_dir)
         self.embedder = NBAEmbeddingsGenerator(data_dir=processed_data_dir, output_dir=embeddings_dir)
-        self.connector = NBAMongoDBConnector(
-            data_dir=embeddings_dir,
-            db_name=db_name,
-            collection_name=collection_name,
-            index_name=index_name
-        )
+        
+        if os.getenv("USE_TURSO", "false").lower() in ("1", "true", "yes"):
+            self.connector = NBATursoConnector(
+                data_dir=embeddings_dir,
+                db_path=os.getenv("TURSO_LOCAL_DB", "nba_docs.db"),
+                table_name=os.getenv("TURSO_TABLE", "documents"),
+                index_name=index_name,
+            )
+            logger.info("Using Turso connector")
+        else:
+            self.connector = NBAMongoDBConnector(
+                data_dir=embeddings_dir,
+                db_name=db_name,
+                collection_name=collection_name,
+                index_name=index_name,
+            )
+            logger.info("Using MongoDB connector")
         
         logger.info("NBA Database Populator initialized")
     
